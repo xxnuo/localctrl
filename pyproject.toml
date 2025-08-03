@@ -4,4 +4,13 @@ version = "0.1.0"
 description = "An open-source remote control service."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.116.1",
+    "loguru>=0.7.3",
+    "passlib[bcrypt]>=1.7.4",
+    "pyjwt[crypto]>=2.10.1",
+    "python-dotenv>=1.1.1",
+    "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0.42",
+    "uvicorn[standard]>=0.35.0",
+]

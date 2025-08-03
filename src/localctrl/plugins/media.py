@@ -1,6 +1,6 @@
 import sys
-
-import pyautogui
+import subprocess
+import shutil
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
@@ -8,6 +8,23 @@ from localctrl.logger import logger
 from localctrl.user import Role, User, get_user
 
 mediaRouter = APIRouter()
+
+
+def _check_linux_command(command):
+    """检查 Linux 系统上是否存在指定命令"""
+    return shutil.which(command) is not None
+
+
+def _get_linux_media_command():
+    """获取 Linux 系统上可用的媒体控制命令"""
+    if _check_linux_command("playerctl"):
+        return "playerctl"
+    elif _check_linux_command("xdotool"):
+        return "xdotool"
+    elif _check_linux_command("dbus-send"):
+        return "dbus-send"
+    else:
+        return None
 
 
 @mediaRouter.post("/mute")
@@ -18,16 +35,32 @@ async def mute(user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui执行系统静音命令
         if sys.platform == "darwin":  # macOS
-            pyautogui.keyDown("fn")
-            pyautogui.keyDown("f9")
-            pyautogui.keyUp("f9")
-            pyautogui.keyUp("fn")  # macOS 静音键
+            # fn+f9 静音键
+            subprocess.run(
+                ["osascript", "-e", "set volume output muted true"], check=True
+            )
         elif sys.platform == "win32":  # Windows
-            pyautogui.press("volumemute")  # Windows 静音键
+            subprocess.run(
+                [
+                    "powershell",
+                    "-c",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
+                ],
+                check=True,
+            )
         elif sys.platform == "linux":  # Linux
-            pyautogui.press("volumemute")  # Linux 静音键
+            if _check_linux_command("amixer"):
+                subprocess.run(["amixer", "-q", "set", "Master", "mute"], check=True)
+            elif _check_linux_command("pactl"):
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "1"], check=True
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable audio control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"
@@ -50,16 +83,32 @@ async def unmute(user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui执行系统取消静音命令
         if sys.platform == "darwin":  # macOS
-            pyautogui.keyDown("fn")
-            pyautogui.keyDown("f9")
-            pyautogui.keyUp("f9")
-            pyautogui.keyUp("fn")  # macOS 静音键（再次按下取消静音）
+            # fn+f9 静音键
+            subprocess.run(
+                ["osascript", "-e", "set volume output muted false"], check=True
+            )
         elif sys.platform == "win32":  # Windows
-            pyautogui.press("volumemute")  # Windows 静音键（再次按下取消静音）
+            subprocess.run(
+                [
+                    "powershell",
+                    "-c",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]173)",
+                ],
+                check=True,
+            )
         elif sys.platform == "linux":  # Linux
-            pyautogui.press("volumemute")  # Linux 静音键（再次按下取消静音）
+            if _check_linux_command("amixer"):
+                subprocess.run(["amixer", "-q", "set", "Master", "unmute"], check=True)
+            elif _check_linux_command("pactl"):
+                subprocess.run(
+                    ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"], check=True
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable audio control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"
@@ -93,41 +142,36 @@ async def set_volume(volume_req: VolumeRequest, user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui调整音量
-        # 先将音量调至最低
         if sys.platform == "darwin":  # macOS
-            # 先将音量调至最低
-            for _ in range(16):  # 确保音量降至最低
-                pyautogui.keyDown("fn")
-                pyautogui.keyDown("f10")
-                pyautogui.keyUp("f10")
-                pyautogui.keyUp("fn")  # 音量减
-
-            # 然后根据请求的音量级别调整
-            steps = int(volume_req.level / 100 * 16)  # macOS大约有16个音量级别
-            for _ in range(steps):
-                pyautogui.keyDown("fn")
-                pyautogui.keyDown("f11")
-                pyautogui.keyUp("f11")
-                pyautogui.keyUp("fn")  # 音量加
+            # macOS音量范围是0-10
+            mac_volume = volume_req.level / 10
+            subprocess.run(
+                ["osascript", "-e", f"set volume output volume {mac_volume}"],
+                check=True,
+            )
         elif sys.platform == "win32":  # Windows
-            # 先将音量调至最低
-            for _ in range(50):  # 确保音量降至最低
-                pyautogui.press("volumedown")
-
-            # 然后根据请求的音量级别调整
-            steps = int(volume_req.level / 100 * 50)  # Windows大约有50个音量级别
-            for _ in range(steps):
-                pyautogui.press("volumeup")
+            # Windows使用nircmd设置音量 (需要安装nircmd)
+            # nircmd的音量范围是0-65535
+            win_volume = int(volume_req.level * 655.35)
+            subprocess.run(["nircmd.exe", "setsysvolume", str(win_volume)], check=True)
         elif sys.platform == "linux":  # Linux
-            # 先将音量调至最低
-            for _ in range(50):  # 确保音量降至最低
-                pyautogui.press("volumedown")
-
-            # 然后根据请求的音量级别调整
-            steps = int(volume_req.level / 100 * 50)  # Linux大约有50个音量级别
-            for _ in range(steps):
-                pyautogui.press("volumeup")
+            if _check_linux_command("amixer"):
+                subprocess.run(
+                    ["amixer", "-q", "set", "Master", f"{volume_req.level}%"],
+                    check=True,
+                )
+            elif _check_linux_command("pactl"):
+                # pactl 音量范围是 0-65535
+                pactl_volume = int(volume_req.level * 655.35)
+                subprocess.run(
+                    ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{pactl_volume}"],
+                    check=True,
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable audio control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"
@@ -150,16 +194,43 @@ async def play_media(user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui执行媒体播放命令
         if sys.platform == "darwin":  # macOS
-            pyautogui.keyDown("fn")
-            pyautogui.keyDown("f7")
-            pyautogui.keyUp("f7")
-            pyautogui.keyUp("fn")  # macOS 播放/暂停键
+            # fn+f7 播放/暂停键
+            subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to key code 100'],
+                check=True,
+            )
         elif sys.platform == "win32":  # Windows
-            pyautogui.press("playpause")  # Windows 播放/暂停键
+            subprocess.run(
+                [
+                    "powershell",
+                    "-c",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]179)",
+                ],
+                check=True,
+            )
         elif sys.platform == "linux":  # Linux
-            pyautogui.press("playpause")  # Linux 播放/暂停键
+            linux_cmd = _get_linux_media_command()
+            if linux_cmd == "playerctl":
+                subprocess.run(["playerctl", "play"], check=True)
+            elif linux_cmd == "xdotool":
+                subprocess.run(["xdotool", "key", "XF86AudioPlay"], check=True)
+            elif linux_cmd == "dbus-send":
+                subprocess.run(
+                    [
+                        "dbus-send",
+                        "--print-reply",
+                        "--dest=org.mpris.MediaPlayer2.spotify",
+                        "/org/mpris/MediaPlayer2",
+                        "org.mpris.MediaPlayer2.Player.PlayPause",
+                    ],
+                    check=True,
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable media control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"
@@ -182,16 +253,43 @@ async def pause_media(user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui执行媒体暂停命令
         if sys.platform == "darwin":  # macOS
-            pyautogui.keyDown("fn")
-            pyautogui.keyDown("f7")
-            pyautogui.keyUp("f7")
-            pyautogui.keyUp("fn")  # macOS 播放/暂停键
+            # fn+f7 播放/暂停键
+            subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to key code 100'],
+                check=True,
+            )
         elif sys.platform == "win32":  # Windows
-            pyautogui.press("playpause")  # Windows 播放/暂停键
+            subprocess.run(
+                [
+                    "powershell",
+                    "-c",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]179)",
+                ],
+                check=True,
+            )
         elif sys.platform == "linux":  # Linux
-            pyautogui.press("playpause")  # Linux 播放/暂停键
+            linux_cmd = _get_linux_media_command()
+            if linux_cmd == "playerctl":
+                subprocess.run(["playerctl", "pause"], check=True)
+            elif linux_cmd == "xdotool":
+                subprocess.run(["xdotool", "key", "XF86AudioPlay"], check=True)
+            elif linux_cmd == "dbus-send":
+                subprocess.run(
+                    [
+                        "dbus-send",
+                        "--print-reply",
+                        "--dest=org.mpris.MediaPlayer2.spotify",
+                        "/org/mpris/MediaPlayer2",
+                        "org.mpris.MediaPlayer2.Player.PlayPause",
+                    ],
+                    check=True,
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable media control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"
@@ -214,16 +312,43 @@ async def next_track(user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui执行下一首曲目命令
         if sys.platform == "darwin":  # macOS
-            pyautogui.keyDown("fn")
-            pyautogui.keyDown("f6")
-            pyautogui.keyUp("f6")
-            pyautogui.keyUp("fn")  # macOS 下一曲键
+            # fn+f6 下一曲键
+            subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to key code 99'],
+                check=True,
+            )
         elif sys.platform == "win32":  # Windows
-            pyautogui.press("nexttrack")  # Windows 下一曲键
+            subprocess.run(
+                [
+                    "powershell",
+                    "-c",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]176)",
+                ],
+                check=True,
+            )
         elif sys.platform == "linux":  # Linux
-            pyautogui.press("nexttrack")  # Linux 下一曲键
+            linux_cmd = _get_linux_media_command()
+            if linux_cmd == "playerctl":
+                subprocess.run(["playerctl", "next"], check=True)
+            elif linux_cmd == "xdotool":
+                subprocess.run(["xdotool", "key", "XF86AudioNext"], check=True)
+            elif linux_cmd == "dbus-send":
+                subprocess.run(
+                    [
+                        "dbus-send",
+                        "--print-reply",
+                        "--dest=org.mpris.MediaPlayer2.spotify",
+                        "/org/mpris/MediaPlayer2",
+                        "org.mpris.MediaPlayer2.Player.Next",
+                    ],
+                    check=True,
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable media control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"
@@ -246,16 +371,43 @@ async def previous_track(user: User = Depends(get_user)):
         )
 
     try:
-        # 使用pyautogui执行上一首曲目命令
         if sys.platform == "darwin":  # macOS
-            pyautogui.keyDown("fn")
-            pyautogui.keyDown("f5")
-            pyautogui.keyUp("f5")
-            pyautogui.keyUp("fn")  # macOS 上一曲键
+            # fn+f5 上一曲键
+            subprocess.run(
+                ["osascript", "-e", 'tell application "System Events" to key code 98'],
+                check=True,
+            )
         elif sys.platform == "win32":  # Windows
-            pyautogui.press("prevtrack")  # Windows 上一曲键
+            subprocess.run(
+                [
+                    "powershell",
+                    "-c",
+                    "(New-Object -ComObject WScript.Shell).SendKeys([char]177)",
+                ],
+                check=True,
+            )
         elif sys.platform == "linux":  # Linux
-            pyautogui.press("prevtrack")  # Linux 上一曲键
+            linux_cmd = _get_linux_media_command()
+            if linux_cmd == "playerctl":
+                subprocess.run(["playerctl", "previous"], check=True)
+            elif linux_cmd == "xdotool":
+                subprocess.run(["xdotool", "key", "XF86AudioPrev"], check=True)
+            elif linux_cmd == "dbus-send":
+                subprocess.run(
+                    [
+                        "dbus-send",
+                        "--print-reply",
+                        "--dest=org.mpris.MediaPlayer2.spotify",
+                        "/org/mpris/MediaPlayer2",
+                        "org.mpris.MediaPlayer2.Player.Previous",
+                    ],
+                    check=True,
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No suitable media control command found on this Linux system",
+                )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported platform"

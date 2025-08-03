@@ -22,3 +22,9 @@ class Config:
     )
     allow_methods: List[str] = os.getenv("LC_ALLOW_METHODS", "*").split(",")
     allow_headers: List[str] = os.getenv("LC_ALLOW_HEADERS", "*").split(",")
+
+    config_dir: str = os.getenv(
+        "LC_CONFIG_DIR", os.path.expanduser("~") + "/.config/localctrl"
+    )
+
+    db_url: str = os.getenv("LC_DB_URL", f"sqlite:///{config_dir}/data.db")

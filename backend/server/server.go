@@ -495,6 +495,10 @@ func (s *Server) serveStaticFiles() gin.HandlerFunc {
 	}
 }
 
+func (s *Server) SetStaticHandler(h gin.HandlerFunc) {
+	s.router.NoRoute(h)
+}
+
 func (s *Server) Run() error {
 	go s.hub.Run()
 	s.clipMgr.StartWatching()
@@ -518,4 +522,8 @@ func (s *Server) Run() error {
 
 func (s *Server) Close() {
 	s.authStore.Close()
+}
+
+func (s *Server) SetStaticHandler(h gin.HandlerFunc) {
+	s.router.NoRoute(h)
 }

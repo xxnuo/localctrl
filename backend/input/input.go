@@ -21,15 +21,7 @@ func MouseUp(button string) {
 }
 
 func MouseScroll(dx, dy int) {
-	if dy != 0 {
-		direction := "down"
-		amount := dy
-		if dy < 0 {
-			direction = "up"
-			amount = -dy
-		}
-		robotgo.Scroll(amount, direction)
-	}
+	robotgo.Scroll(dx, dy)
 }
 
 func KeyDown(key string) {
@@ -40,7 +32,7 @@ func KeyUp(key string) {
 	robotgo.KeyUp(key)
 }
 
-func KeyTap(key string, modifiers ...string) {
+func KeyTap(key string, modifiers ...interface{}) {
 	robotgo.KeyTap(key, modifiers...)
 }
 

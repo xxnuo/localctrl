@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../hooks/useAuth'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { Maximize, Settings2, Monitor, Keyboard } from 'lucide-react'
-import type { ScreenInfo, MonitorList, ControlGrant } from '../types/protocol'
+import type { ScreenInfo, MonitorList } from '../types/protocol'
 
 interface Props {
   onStatsUpdate: (stats: { bandwidth: number; latency: number; fps: number }) => void

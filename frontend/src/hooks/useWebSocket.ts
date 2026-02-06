@@ -20,10 +20,10 @@ export function useWebSocket({
   reconnect = true,
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>()
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [status, setStatus] = useState<WSStatus>('disconnected')
   const [latency, setLatency] = useState(0)
-  const pingTimer = useRef<ReturnType<typeof setInterval>>()
+  const pingTimer = useRef<ReturnType<typeof setInterval>>(undefined)
 
   const connect = useCallback(() => {
     if (!token) return

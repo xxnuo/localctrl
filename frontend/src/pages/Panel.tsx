@@ -13,7 +13,7 @@ import StatusBar from '../components/StatusBar'
 import type { SysInfo } from '../types/protocol'
 
 export default function Panel() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const { logout } = useAuth()
